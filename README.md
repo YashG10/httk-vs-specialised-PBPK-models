@@ -1,2 +1,4 @@
 # httk-vs-specialised-PBPK-models
-To compare performance, applicability and regulatory acceptance of generic vs specialized models.
+Background: Regulators and risk assessors are relying on PBPK modeling for regulatory decision-making and chemical risk assessment. Overtime, multiple open source PBPK platforms have emerged providing standardized models for chemical risk assessment relying heavily on QSAR and other in-silico tools for parameterization. On the other hand, researchers also keep on developing specialized model for specific compounds or chemical classes. Objective of this study is to compare performance, applicability and regulatory acceptance of generic vs specialized models.
+
+Methodology: We evaluated generic models (httk) against specialized model for priority class chemicals (industrial and environmental contaminants and toxic drugs). Model performance was assessed using quantitative prediction accuracy metric for plasma and other organ concentrations, and parameter sensitivity.
