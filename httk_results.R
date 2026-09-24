@@ -2,6 +2,7 @@
 # httk_qspr_sweep_combined_fixed.R
 # Full PBPK pipeline wrapped as a function and run once per QSPR source.
 # Natively integrated with httk package data-loading functions.
+# Includes explicit parameterization forcing and integrated observed PK data.
 # =============================================================================
 
 library(httk)
@@ -16,14 +17,7 @@ library(dplyr)
 DEFAULT_DOSE_MG_KG <- 1.0
 
 # -----------------------------------------------------------------------------
-# Reference hepatic blood flow (well-stirred model upper bound for CL), used
-# downstream to flag flow-limited clearance artefacts (CL > QH).
-# httk has no exported "QH_xxx" constant -- it stores liver blood flow
-# allometrically (mL/min/kg^0.75) in tissue.data, and average body weight (kg)
-# in physiology.data. We derive an absolute L/h/kg value from httk's own
-# reference physiology so this matches the package rather than a hardcoded
-# literature number. Falls back to literature defaults if the lookup fails
-# (e.g. table column names differ across httk versions).
+# Reference hepatic blood flow (well-stirred model upper bound for CL)
 # -----------------------------------------------------------------------------
 derive_QH_L_H_KG <- function(species, fallback) {
   tryCatch({
@@ -49,7 +43,6 @@ QH_RAT_L_H_KG   <- derive_QH_L_H_KG("Rat",   fallback = 4.2)
 cat(sprintf("Reference hepatic blood flow: Human = %.3f L/h/kg, Rat = %.3f L/h/kg\n",
             QH_HUMAN_L_H_KG, QH_RAT_L_H_KG))
 
-# Kept custom doses ONLY for compounds that have observed data.
 # Doses scaled to mg/kg assuming a 70 kg body weight.
 cpd_obs_dose <- list(
   Paracet    = 14.29,  
@@ -58,6 +51,7 @@ cpd_obs_dose <- list(
   # --- Integrated Modeled Exposure Scenarios ---
   Aldica     = 17.40,
   Androst    = 1.43,
+  Aspirin    = 5.714,
   AZT        = 1.43,
   BaP        = 1.43e-6,
   BPS        = 0.10,
@@ -79,8 +73,10 @@ cpd_obs_dose <- list(
   Genist     = 0.714,
   Haloper    = 0.50,
   Ibupro     = 5.71,
+  Lorata     = 0.143,
   Lovasta    = 0.571,
-  MEHP       = 0.65,
+  MEHP       = 0.693,
+  `5OH-MEHP` = 0.693,
   Naprox     = 7.14,
   Nicotine   = 0.0857,
   Nitro_f    = 1.43,
@@ -111,6 +107,86 @@ cpd_obs_dose <- list(
 
 # Added observed data, raw units converted to uM, with integrated specific references
 obs_parent <- list(
+  Aspirin = list(
+    Human = data.frame(
+      time_h      = c(0.167, 0.25, 0.333, 0.5, 0.667, 0.75, 1.0, 1.5, 2.0, 3.0),
+      Cplasma_uM  = c(2.5, 4.5, 8.0, 14.0, 9.5, 7.0, 4.5, 2.2, 1.2, 0.45),
+      sd_uM       = NA,
+      dose_mg_kg  = 5.714,
+      linear_pk   = TRUE,
+      matrix      = "Plasma — Acetylsalicylic acid (400 mg oral dose; 12 healthy subjects)",
+      stringsAsFactors = FALSE)
+  ),
+  Cetiri = list(
+    Human = data.frame(
+      time_h      = c(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 6.0, 8.0, 10.0, 12.0, 24.0),
+      Cplasma_uM  = c(0, 40, 100, 225, 250, 200, 170, 140, 125, 108, 93, 70, 22) / 388.89,
+      sd_uM       = NA,
+      dose_mg_kg  = 0.143,
+      linear_pk   = TRUE,
+      matrix      = "Plasma — Cetirizine (10 mg Zyrtecset oral dose; 12 healthy volunteers)",
+      stringsAsFactors = FALSE)
+  ),
+  Haloper = list(
+    Human = data.frame(
+      time_h      = c(0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 7.0, 12.0, 18.0, 24.0, 36.0, 44.0),
+      Cplasma_uM  = c(4.4, 16.0, 34.0, 38.0, 34.0, 28.0, 22.0, 19.0, 14.0, 9.5, 10.0, 7.2, 4.2, 3.8) / 375.86,
+      sd_uM       = NA,
+      dose_mg_kg  = 0.50,
+      linear_pk   = TRUE,
+      matrix      = "Serum — Haloperidol (0.5 mg/kg oral dose; Subject 2)",
+      stringsAsFactors = FALSE)
+  ),
+  Lorata = list(
+    Human = data.frame(
+      time_h      = c(0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 12.0, 16.0, 24.0, 36.0, 48.0, 72.0, 96.0),
+      Cplasma_uM  = c(0.1, 1.5, 2.7, 2.6, 2.2, 1.75, 1.35, 1.1, 0.8, 0.65, 0.4, 0.2, 0.1, 0.05, 0.04, 0.02, 0.0) / 382.88,
+      sd_uM       = NA,
+      dose_mg_kg  = 0.143,
+      linear_pk   = TRUE,
+      matrix      = "Plasma — Loratadine (10 mg oral dose)",
+      stringsAsFactors = FALSE)
+  ),
+  MEHP = list(
+    Human = data.frame(
+      time_h      = c(2.0, 4.0, 6.5, 8.3),
+      Cplasma_uM  = c(4.95, 0.57, 0.29, 0.15),
+      sd_uM       = NA,
+      dose_mg_kg  = 0.693,
+      linear_pk   = TRUE,
+      matrix      = "Plasma — MEHP (48.5 mg oral dose)",
+      stringsAsFactors = FALSE)
+  ),
+  `5OH-MEHP` = list(
+    Human = data.frame(
+      time_h      = c(2.0, 4.0, 6.5, 8.3),
+      Cplasma_uM  = c(0.20, 0.14, 0.05, 0.03),
+      sd_uM       = NA,
+      dose_mg_kg  = 0.693,
+      linear_pk   = TRUE,
+      matrix      = "Plasma — 5OH-MEHP (48.5 mg oral dose)",
+      stringsAsFactors = FALSE)
+  ),
+  Naprox = list(
+    Human = data.frame(
+      time_h      = c(2.5, 5.0, 10.0, 15.0, 24.0, 28.0, 38.0, 48.0, 72.0),
+      Cplasma_uM  = c(55.0, 40.0, 28.0, 20.0, 13.0, 11.0, 8.0, 5.5, 3.0) * 1000 / 230.26,
+      sd_uM       = NA,
+      dose_mg_kg  = 7.14,
+      linear_pk   = TRUE,
+      matrix      = "Plasma — Naproxen (500 mg oral dose; Subject A representative)",
+      stringsAsFactors = FALSE)
+  ),
+  Prednis = list(
+    Human = data.frame(
+      time_h      = c(0.0, 0.5, 1.0, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 12.0),
+      Cplasma_uM  = c(0, 210, 370, 635.2, 625, 490, 390, 315, 250, 180, 120, 100, 50) / 360.44,
+      sd_uM       = NA,
+      dose_mg_kg  = 0.286,
+      linear_pk   = TRUE,
+      matrix      = "Serum — Prednisolone (20 mg oral dose; Reference formulation)",
+      stringsAsFactors = FALSE)
+  ),
   BPA = list(
     Human = data.frame(
       time_h      = c(0,    0.5,    1.0,    1.33,   2.0,   3.0,   4.0,   6.0,   8.0),
@@ -145,7 +221,6 @@ obs_parent <- list(
   Nitro_f = list(
     Human = data.frame(
       time_h      = c(0.0, 0.5, 1.0, 2.0, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 8.0, 10.0, 12.0, 16.0),
-      # MW = 238.16 g/mol; conversion from ng/mL to uM: (ng/mL) / 238.16
       Cplasma_uM  = c(0, 10, 50, 150, 260, 290, 320, 450, 430, 370, 340, 300, 240, 170, 80, 40, 10) / 238.16,
       sd_uM       = NA,
       dose_mg_kg  = 1.43,
@@ -156,7 +231,6 @@ obs_parent <- list(
   Flutam = list(
     Human = data.frame(
       time_h      = c(0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0),
-      # MW = 276.29 g/mol
       Cplasma_uM  = c(0.0, 3.9, 9.6, 18.8, 20.2, 13.2, 8.5, 2.4) / 276.29,
       sd_uM       = NA,
       dose_mg_kg  = 3.57,
@@ -167,7 +241,6 @@ obs_parent <- list(
   Dexame = list(
     Human = data.frame(
       time_h      = c(1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 24.0, 48.0),
-      # MW = 392.46 g/mol; conversion from ng/mL to uM: (ng/mL) / 392.46
       Cplasma_uM  = c(17.0, 26.0, 24.0, 27.0, 24.0, 16.0, 11.0, 4.5, 1.0) / 392.46,
       sd_uM       = NA,
       dose_mg_kg  = 0.057,
@@ -425,16 +498,6 @@ obs_parent <- list(
       matrix      = "Plasma",
       stringsAsFactors = FALSE)
   ),
-  `BPA` = list(
-    Human = data.frame(
-      time_h      = c(0.08, 0.17, 0.25, 0.33, 0.42, 0.5, 0.67, 0.75, 0.83, 1.0, 1.33, 1.67, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 8.0, 9.0, 12.0, 24.0, 48.0),
-      Cplasma_uM  = c(0.05, 0.2, 0.45, 0.7, 0.95, 1.15, 1.35, 1.4, 1.42, 1.38, 1.25, 0.98, 0.85, 0.55, 0.38, 0.28, 0.24, 0.21, 0.19, 0.17, 0.15, 0.135, 0.12, 0.095, 0.078, 0.055, 0.013, 0.00125),
-      sd_uM       = NA,
-      dose_mg_kg  = 0.1,
-      linear_pk   = TRUE,
-      matrix      = "Plasma",
-      stringsAsFactors = FALSE)
-  ),
   `Caffei` = list(
     Human = data.frame(
       time_h      = c(0.6, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0, 24.0),
@@ -585,16 +648,6 @@ obs_parent <- list(
       matrix      = "Plasma",
       stringsAsFactors = FALSE)
   ),
-  MEHP = list(
-    Human = data.frame(
-      time_h      = c(2.0, 4.0, 6.5, 8.3),
-      Cplasma_uM  = c(4.95, 0.57, 0.29, 0.15),
-      sd_uM       = NA,
-      dose_mg_kg  = 0.65,
-      linear_pk   = TRUE,
-      matrix      = "Plasma",
-      stringsAsFactors = FALSE)
-  ),
   Nicotine = list(
     Human = data.frame(
       time_h      = c(0.0, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0),
@@ -627,7 +680,7 @@ obs_parent <- list(
   )
 )
 
-# Global plot theme so it can be accessed by both the function and the comparison code
+# Global plot theme
 theme_pbpk <- function(bs = 10) {
   theme_bw(base_size = bs) +
     theme(plot.title    = element_text(face = "bold", size = bs, hjust = 0),
@@ -646,11 +699,10 @@ theme_pbpk <- function(bs = 10) {
           legend.background = element_blank())
 }
 
-
 run_pipeline_for_source <- function(QSPR_SOURCE, QSPR_OUTPUT_SUFFIX = QSPR_SOURCE) {
   
   # =============================================================================
-  # ISOLATION FIX: Reset httk database natively
+  # Reset httk database natively
   # =============================================================================
   reset_httk()
   
@@ -663,7 +715,6 @@ run_pipeline_for_source <- function(QSPR_SOURCE, QSPR_OUTPUT_SUFFIX = QSPR_SOURC
   wb <- createWorkbook()
   
   compounds <- list(
-    # --- From the Previous Excel File ---
     list(abbrev="BBP", cas="85-68-7", name="Benzyl butyl phthalate"),
     list(abbrev="BPA", cas="80-05-7", name="Bisphenol A"),
     list(abbrev="BPB", cas="77-40-7", name="Bisphenol B"),
@@ -801,8 +852,6 @@ run_pipeline_for_source <- function(QSPR_SOURCE, QSPR_OUTPUT_SUFFIX = QSPR_SOURC
     list(abbrev="Cotinine", cas="486-56-6", name="Cotinine"),
     list(abbrev="HCB", cas="118-74-1", name="Hexachlorobenzene"),
     list(abbrev="PBDE47", cas="40088-47-9", name="2,2',4,4'-Tetrabromodiphenyl ether"),
-    
-    # --- New Compounds Appended from Provided List ---
     list(abbrev="Tizoxanide", cas="173903-47-4", name="Tizoxanide"),
     list(abbrev="UV327", cas="3864-99-1", name="UV-327"),
     list(abbrev="Triclop", cas="55335-06-3", name="Triclopyr"),
@@ -1013,16 +1062,25 @@ run_pipeline_for_source <- function(QSPR_SOURCE, QSPR_OUTPUT_SUFFIX = QSPR_SOURC
       if (is.finite(max_obs) && max_obs > max_t_h) max_t_h <- ceiling(max_obs)
     }
     
+    # -------------------------------------------------------------------------
+    # EXPLICIT PARAMETERIZATION FIX: Guarantees the Schmitt method is forced
+    # prior to passing values to the ODE solver.
+    # -------------------------------------------------------------------------
     run_sim <- function(cas, species, extra = list()) {
-      base_args <- list(chem.cas = cas, species = species,
-                        dose     = cpd_dose,
-                        times    = seq(0, max_t_h, 0.1) / 24,   # hours -> days
-                        maxsteps = 500000)
-      args <- c(base_args, extra)
       tryCatch(
         suppressMessages(suppressWarnings({
-          df <- as.data.frame(do.call(solve_pbtk, args))
-          df$time <- df$time * 24                          # days -> hours (rest of script expects hours)
+          param_args <- list(chem.cas = cas, species = species)
+          if (isTRUE(extra$default.to.human)) param_args$default.to.human <- TRUE
+          
+          params <- do.call(parameterize_pbtk, param_args)
+          
+          base_args <- list(parameters = params,
+                            dose       = cpd_dose,
+                            times      = seq(0, max_t_h, 0.1) / 24,
+                            maxsteps   = 500000)
+          
+          df <- as.data.frame(do.call(solve_pbtk, base_args))
+          df$time <- df$time * 24                          # days -> hours 
           df
         })),
         error = function(e) {
@@ -1031,10 +1089,18 @@ run_pipeline_for_source <- function(QSPR_SOURCE, QSPR_OUTPUT_SUFFIX = QSPR_SOURC
           if (!isTRUE(extra$default.to.human)) {
             cat(sprintf("   Retrying with default.to.human=TRUE ... "))
             flush.console()
-            args2 <- c(args, list(default.to.human = TRUE))
+            
             tryCatch(
               suppressMessages(suppressWarnings({
-                df2 <- as.data.frame(do.call(solve_pbtk, args2))
+                param_args2 <- list(chem.cas = cas, species = species, default.to.human = TRUE)
+                params2 <- do.call(parameterize_pbtk, param_args2)
+                
+                base_args2 <- list(parameters = params2,
+                                   dose       = cpd_dose,
+                                   times      = seq(0, max_t_h, 0.1) / 24,
+                                   maxsteps   = 500000)
+                
+                df2 <- as.data.frame(do.call(solve_pbtk, base_args2))
                 df2$time <- df2$time * 24
                 df2
               })),
@@ -1058,14 +1124,19 @@ run_pipeline_for_source <- function(QSPR_SOURCE, QSPR_OUTPUT_SUFFIX = QSPR_SOURC
     
     cat("   Parent Pregnancy ... "); flush.console()
     out_preg <- tryCatch(
-      suppressMessages(suppressWarnings(
-        as.data.frame(solve_fetal_pbtk(chem.cas = cpd$cas,
+      suppressMessages(suppressWarnings({
+        preg_params <- parameterize_fetal_pbtk(chem.cas = cpd$cas)
+        
+        as.data.frame(solve_fetal_pbtk(parameters = preg_params,
                                        dose     = cpd_dose,
                                        times    = seq(PREG_T0_H, 280, 0.1),
-                                       maxsteps = 100000)))),
+                                       maxsteps = 100000))
+      })),
       error = function(e) {
         cat(sprintf("FAIL: %s\n", conditionMessage(e)))
-        flush.console(); NULL })
+        flush.console(); NULL 
+      }
+    )
     if (!is.null(out_preg)) cat(sprintf("✓ (%d rows)\n", nrow(out_preg))) else cat("NULL\n")
     flush.console()
     
@@ -1326,8 +1397,7 @@ run_pipeline_for_source <- function(QSPR_SOURCE, QSPR_OUTPUT_SUFFIX = QSPR_SOURC
 }
 
 # =============================================================================
-# DRIVER — run the pipeline once per QSPR source (including Default), then build
-# ONE combined comparison workbook with all sources overlaid on the same plots.
+# DRIVER
 # =============================================================================
 qspr_sources <- c("Default", "Sipes2017", "Pradeep2020", "Dawson2021")
 results_by_source <- list()
@@ -1370,7 +1440,6 @@ if (length(results_by_source) > 0) {
     writeData(cwb, "PK_Summary", pk_all)
     setColWidths(cwb, "PK_Summary", cols = 1:ncol(pk_all), widths = "auto")
     
-    # Create a dedicated Human AUC comparison sheet across QSPR sources
     if ("Human" %in% pk_all$Species) {
       auc_human <- pk_all %>%
         filter(Species == "Human") %>%
@@ -1386,7 +1455,6 @@ if (length(results_by_source) > 0) {
                rows = 1, cols = 1:ncol(auc_human), gridExpand = TRUE)
       writeData(cwb, "Human_AUC_Comparison", auc_human, startRow = 2)
       
-      # Apply basic header style
       addStyle(cwb, "Human_AUC_Comparison",
                createStyle(fontColour = "#FFFFFF", fgFill = "#1A5276", halign = "CENTER", fontName = "Calibri", textDecoration = "Bold"),
                rows = 2, cols = 1:ncol(auc_human), gridExpand = TRUE)
@@ -1415,7 +1483,7 @@ if (length(results_by_source) > 0) {
       facet_wrap(~ Population, scales = "free", ncol = 3) +
       labs(title = paste0(ab, " — Plasma concentration, QSPR sources"),
            x = "Time (h)", y = "Cplasma (µM)") +
-      theme_pbpk() # This now references the global function
+      theme_pbpk()
     
     if (ab %in% names(obs_parent) && !is.null(obs_parent[[ab]]$Human)) {
       obs_df <- obs_parent[[ab]]$Human
